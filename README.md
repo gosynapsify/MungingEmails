@@ -2,13 +2,6 @@
 ---------------
 Designed to scale to all email munging for "Synapsification".
 
-## Check for new emails
-Checks to see if there are new emails, can be adapded for other email sets.
-#### Usage
----
-```bash
-python check_for_new.py <file_to_store_already_downloaded_emails alert_email directory_for_attachment>
-```
 ## OCR'd Munging
 
 A library to download and convert OCR'd pdf files to an easy to work with system of collections, documents, and emails.
