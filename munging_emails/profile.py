@@ -1,5 +1,15 @@
-# -*- coding: utf-8 -*-
-__docformat__ = 'restructuredtext en'
+"""
+profile.py
+
+Contains the classes for all of the profile disambiguation and classes assosiated with it.
+
+- ProfileStorage: Container object that handles the creation of profiles and disambiguation.
+- Profile: The actual profile class, contains the average creation methods, as well as storage and accessor methods.
+- Contact: Feed this an input string and it will parse the contact.
+- Name: What is returned when you call Contact.get_name(), has getter methods for first, middle, and last.
+- EmailAddress: What is returned when you call Contact.get_email(), has getter methods for user and domain.
+
+"""
 __author__ = 'alex'
 import re
 from fuzzywuzzy import fuzz
@@ -30,8 +40,12 @@ class ProfileStorage(object):
         print "\nStarting profile disambiguation..."
         print "===================================="
         print "Creating initial profiles..."
-        self._create_initial_profiles()
-        print "Done!"
+        if not use_pickle_load:
+            self._create_initial_profiles()
+            pickle.dump(self.__profiles, open(pickle_file, 'w'))
+        else:
+            self.__profiles = pickle.load(open(pickle_file, 'r'))
+        print "\nDone!"
         print "------------------------------------"
 
         print "Starting to merge profiles..."
@@ -47,6 +61,7 @@ class ProfileStorage(object):
         print "Finished profile disambiguation."
 
     def _create_initial_profiles(self):
+        # TODO - Comment this
         contact_len = len(self.__contacts)
         for cidx, contact in enumerate(self.__contacts):
             print "\r", str(float(cidx) / contact_len * 100) + "% done with initial creation.",
@@ -65,7 +80,7 @@ class ProfileStorage(object):
 
     def _merge_rec(self, pass_num):
         profile_list_merged = []
-        # if pass_num % 50 == 0:
+        #if pass_num % 50 == 0:
         # print "----PASS " + str(pass_num) + "----"
         for idx1, pro1 in enumerate(self.__profiles):
             for idx2, pro2 in enumerate(self.__profiles):
@@ -88,17 +103,66 @@ class ProfileStorage(object):
         print "-----" + str(pass_num) + " Total Passes-----"
 
     def _merge_iter(self):
+        # This function is an iterative merging algorithm.
         idx = 0
+        # Runs until broken.
         while True:
-            # if idx % 50 == 0:
-            # print "----PASS " + str(idx) + "----"
+            print "\rPass: " + str(idx),
             idx += 1
             orig_len = len(self.__profiles)
             profile_list_merged = []
             try:
+                # Compares every profile to every other profile, could be much more efficent.
+                # TODO - In future, should never do same comparison twice!
                 for idx1, pro1 in enumerate(self.__profiles):
                     for idx2, pro2 in enumerate(self.__profiles):
                         if idx1 != idx2:
+                            # If they are over 90% similar, then create an empty profile, add all of the contacts from
+                            # both profiles to it and then update the average contact.
+                            if pro1.get_average_contact().get_name().compare_to(
+                                    pro2.get_average_contact().get_name()) > 90 or pro1.get_average_contact().get_email_address(). \
+                                    compare_to(pro2.get_average_contact().get_email_address()) > 90:
+                                merged_profile = Profile()
+                                for contact1 in pro1.get_contacts():
+                                    merged_profile.add_contact(contact1, False)
+                                for contact2 in pro2.get_contacts():
+                                    merged_profile.add_contact(contact2, False)
+                                merged_profile._update_average()
+                                profile_list_merged.append(merged_profile)
+                                # Rebuild a new list.
+                                for idx_p, profile_not_merged in enumerate(self.__profiles):
+                                    if idx_p not in [idx1, idx2]:
+                                        profile_list_merged.insert(0, profile_not_merged)
+                                self.__profiles = profile_list_merged
+                                # Break out of both for loops
+                                raise StopIteration
+            except StopIteration:
+                # Goes to the beginning of the while loop.
+                continue
+            if orig_len == len(self.__profiles):
+                break
+        print "----" + str(idx) + " Total Passes----"
+
+    def _merge_iter_fixes(self):
+        idx = 0
+        idx_dict = {}
+        for x in xrange(len(self.__profiles)):
+            idx_dict[x] = [x2 for x2 in xrange(len(self.__profiles))]
+        profiles_working = []
+        while True:
+            if idx % 10 == 0:
+                print "----PASS " + str(idx) + "----"
+            idx += 1
+            to_remove = []
+            orig_len = len(profiles_working)
+            profile_list_merged = []
+            try:
+                for idx1 in idx_dict:
+                    for idx2 in idx_dict[idx1]:
+                        to_remove.append([idx1, idx2])
+                        if idx1 != idx2:
+                            pro1 = self.__profiles[idx1]
+                            pro2 = self.__profiles[idx2]
                             if pro1.get_average_contact().get_name().compare_to(
                                     pro2.get_average_contact().get_name()) > 90 or pro1.get_average_contact().get_email_address(). \
                                     compare_to(pro2.get_average_contact().get_email_address()) > 90:
@@ -112,12 +176,18 @@ class ProfileStorage(object):
                                 for idx_p, profile_not_merged in enumerate(self.__profiles):
                                     if idx_p not in [idx1, idx2]:
                                         profile_list_merged.insert(0, profile_not_merged)
-                                self.__profiles = profile_list_merged
+                                profiles_working = profile_list_merged
                                 raise StopIteration
             except StopIteration:
+                for idx_list in to_remove:
+                    try:
+                        del idx_dict[idx_list[0]][idx_list[1]]
+                    except:
+                        print idx_list[0], idx_list[1]
                 continue
-            if orig_len == len(self.__profiles):
+            if orig_len == len(profiles_working):
                 break
+        self.__profiles = profiles_working
         print "----" + str(idx) + " Total Passes----"
 
     def get_profile(self, contact):
@@ -130,6 +200,42 @@ class ProfileStorage(object):
         for profile in self.__profiles:
             if profile.contact_matches_profile(contact):
                 return profile
+
+    def do_manual_merge(self, new_display_name, list_to_merge):
+        """
+        Manually merges a list of profiles into one with the provided display name.
+
+        :param new_display_name: The new display name.
+        :type new_display_name: str
+        :param list_to_merge: The list of display names to be merged.
+        :type list_to_merge: list[str]
+        :return: None
+        :rtype: None
+        """
+        profiles_to_be_merged = []
+        to_delete = []
+        for idx, profile in enumerate(self.__profiles):
+            if str(profile.get_average_contact()) in list_to_merge:
+                print "Found Match"
+                profiles_to_be_merged.append(profile)
+                to_delete.append(idx)
+
+        merged_profile = Profile()
+        for profile in profiles_to_be_merged:
+            for contact in profile.get_contacts():
+                merged_profile.add_contact(contact, False)
+
+        print len(self.__profiles)
+        to_delete.sort()
+        for idx, idx_to_delete in enumerate(to_delete):
+            print idx_to_delete
+            print "Deleted:", self.__profiles.pop(idx_to_delete - idx).get_average_contact()
+        print len(self.__profiles)
+        merged_profile.set_average(new_display_name)
+        self.__profiles.append(merged_profile)
+
+    def get_profiles(self):
+        return self.__profiles
 
 
 class Profile(object):
@@ -157,6 +263,18 @@ class Profile(object):
         self.__contacts.append(contact)
         if update:
             self._update_average()
+
+    def set_average(self, average):
+        """
+        Sets the average contact string.
+
+        :param average: The string representing the average.
+        :type average: str
+        :return: None
+        :rtype: None
+        """
+
+        self.__average_contact = average
 
     def get_contacts(self):
         """
@@ -365,7 +483,8 @@ class EmailAddress(object):
             self.__user = split_up[0]
             self.__domain = split_up[1]
         except IndexError:
-            {}
+            print "Error parsing email address!"
+            pass
 
     def compare_to(self, email_address):
         """
@@ -529,6 +648,7 @@ class Contact(object):
         :param redacted_string: The string to show if an item has been redacted.
         :return: None.
         """
+        self.__regex_email_pattern = re.compile(r'[\w\.-]+@[\w\.-]+', re.UNICODE)
         self.__raw_string = raw_string
         self.__redacted_string = redacted_string
         self._run()
@@ -657,7 +777,7 @@ class Contact(object):
         # raw = raw.replace("", "")
         # identify email address
         try:
-            email_address = re.search(r'[\w\.-]+@[\w\.-]+', raw)
+            email_address = re.search(self.__regex_email_pattern, raw)
             self.__email_address = EmailAddress(email_address.group(0).strip())
         except AttributeError:
             # No email found
