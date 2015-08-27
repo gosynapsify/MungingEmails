@@ -1,10 +1,9 @@
 # MungingEmails
 ---------------
-Designed to scale for converting any input email format to a standard digital dictionary of each email's metadata for more sophisticated processing, such as Natural Language Processing, graph analysis, or other machine learning techniques.
+Designed to scale to all email munging for "Synapsification".
 
 ## Check for new emails
-Checks to see if there are new emails from a given source, can be adapded for other email sets.
-
+Checks to see if there are new emails, can be adapded for other email sets.
 #### Usage
 ---
 ```bash
@@ -26,8 +25,7 @@ Move pdftotext exectutable to /usr/local/bin
 
 ##### Usage
 ---
-
-**Note:** This is just a quick getting started, for the documentation, either compile the docs yourself with the make script in the docs directory, or download [this zip](https://www.dropbox.com/s/hdrc7f9nsv6kkh1/docs.zip?dl=0) and open the html file.
+**Note:** This is just a quick getting started, for real docs navigate to the docs directory and run the make file like "make <type>" (usually html) to create your docs. This will also ensure they are the most up to date.
 
 - Doing everything:
     ```python
@@ -84,3 +82,25 @@ Move pdftotext exectutable to /usr/local/bin
     ```
 
     This code will only scrape the data from a given set of converted files.
+
+- To use Amazon S3, just set the flag use_s3=True. Then give your directories in the format "mybucket/mydir/" and it will work the same way, except in the cloud.s
+
+- If you would like to run it over the command line, do this:
+    ```bash
+    python command_line_tool.py
+    ```
+
+    This will read from a json file called "conf.json" in the same directory. This file should have a format like this:
+
+    ```json
+    {
+      "download": true,
+      "url_list_file": "path/to/file",
+      "where_to_download": "downloads/",
+      "convert": true,
+      "convert_output_dir": "converted_text/",
+      "fix_files": true,
+      "fixing_params": [7, 5, 5],
+      "use_s3": false
+  }
+    ```
